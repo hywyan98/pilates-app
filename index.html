@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pilates Journey | 皮拉提斯紀錄</title>
+
+<!-- 連結 PWA 的 manifest 檔案 -->
+  <link rel="manifest" href="./manifest.json">
+  
+  <!-- 定義瀏覽器與手機狀態列的主題色 (與 manifest 相同) -->
+  <meta name="theme-color" content="#9CAF88">
+  
+  <!-- 針對 iOS 設備的桌面圖示支援 -->
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            oat: '#F7F6F0',        /* 燕麥米色背景 */
+            sage: '#9CAF88',       /* 莫蘭迪綠主要色 */
+            sageHover: '#8A9D76',  /* 莫蘭迪綠懸停色 */
+            charcoal: '#4A4A4A',   /* 柔和的深灰色文字 */
+            softGray: '#F0EFE9'    /* 淺灰卡片底色 */
+          },
+          fontFamily: {
+            sans: ['"Helvetica Neue"', 'Helvetica', 'Arial', '"PingFang TC"', '"蘋果儷中黑"', '"Microsoft JhengHei"', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    /* 隱藏捲軸但保留滾動功能，讓介面更簡潔 */
+    ::-webkit-scrollbar {
+      width: 0px;
+      background: transparent;
+    }
+    body {
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body class="bg-oat text-charcoal min-h-screen font-sans selection:bg-sage selection:text-white">
+
+  <div class="max-w-md mx-auto min-h-screen flex flex-col relative pb-10">
+    
+    <header class="pt-10 pb-6 px-6 text-center">
+      <h1 class="text-2xl font-bold tracking-wider text-sage">Pilates Journey</h1>
+      <p class="text-sm mt-1 text-gray-500">專注呼吸，紀錄每一天的成長</p>
+    </header>
+
+    <main class="flex-1 px-5">
+      <div class="bg-white rounded-3xl shadow-sm p-6 mb-8 border border-softGray">
+        <form id="recordForm" class="space-y-4">
+          
+          <div>
+            <label for="date" class="block text-sm font-medium mb-1">訓練日期</label>
+            <input type="date" id="date" required 
+              class="w-full bg-softGray rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sage/50 transition-all">
+          </div>
+
+          <div class="flex gap-4">
+            <div class="flex-1">
+              <label for="type" class="block text-sm font-medium mb-1">課程類型</label>
+              <select id="type" required 
+                class="w-full bg-softGray rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sage/50 transition-all appearance-none">
+                <option value="核心墊上 (Mat)">核心墊上 (Mat)</option>
+                <option value="器械 (Reformer)">器械 (Reformer)</option>
+                <option value="深層伸展 (Stretch)">深層伸展 (Stretch)</option>
+                <option value="綜合訓練 (Mixed)">綜合訓練 (Mixed)</option>
+              </select>
+            </div>
+            <div class="w-1/3">
+              <label for="duration" class="block text-sm font-medium mb-1">時長 (分)</label>
+              <input type="number" id="duration" min="1" placeholder="45" required 
+                class="w-full bg-softGray rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sage/50 transition-all">
+            </div>
+          </div>
+
+          <div>
+            <label for="notes" class="block text-sm font-medium mb-1">身體感受與筆記</label>
+            <textarea id="notes" rows="3" placeholder="例如：今天百次呼吸 (Hundred) 做得更穩定了..." 
+              class="w-full bg-softGray rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sage/50 transition-all resize-none"></textarea>
+          </div>
+
+          <button type="submit" 
+            class="w-full bg-sage text-white rounded-xl py-3 font-medium tracking-wide shadow-md shadow-sage/20 hover:bg-sageHover active:scale-[0.98] transition-all mt-2">
+            儲存紀錄
+          </button>
+        </form>
+      </div>
+
+      <div>
+        <div class="flex justify-between items-end mb-4 px-1">
+          <h2 class="text-lg font-semibold">歷史紀錄</h2>
+          <span class="text-xs text-gray-400" id="totalCount">共 0 筆</span>
+        </div>
+        
+        <div id="historyList" class="space-y-3">
+          </div>
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+    // 初始化：設定日期預設為今天
+    const dateInput = document.getElementById('date');
+    const today = new Date().toISOString().split('T')[0];
+    dateInput.value = today;
+
+    // 取得 DOM 元素
+    const form = document.getElementById('recordForm');
+    const historyList = document.getElementById('historyList');
+    const totalCount = document.getElementById('totalCount');
+
+    // 從 LocalStorage 載入資料，若無則為空陣列
+    let records = JSON.parse(localStorage.getItem('pilatesRecords')) || [];
+
+    // 渲染歷史紀錄列表
+    function renderRecords() {
+      historyList.innerHTML = '';
+      
+      if (records.length === 0) {
+        historyList.innerHTML = `
+          <div class="text-center py-10 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">
+            尚未有紀錄，開始你的第一堂課吧！
+          </div>
+        `;
+        totalCount.textContent = `共 0 筆`;
+        return;
+      }
+
+      // 依日期降序排序 (最新的在最上面)
+      records.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      records.forEach((record, index) => {
+        const card = document.createElement('div');
+        card.className = "bg-white p-4 rounded-2xl shadow-sm border border-softGray relative group";
+        
+        // 處理沒有筆記的顯示
+        const notesHtml = record.notes 
+          ? `<p class="text-sm text-gray-600 mt-2 bg-oat/50 p-2 rounded-lg">${record.notes}</p>` 
+          : '';
+
+        card.innerHTML = `
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="text-xs font-medium bg-sage/10 text-sage px-2 py-1 rounded-md mb-2 inline-block">
+                ${record.type}
+              </span>
+              <h3 class="font-medium text-charcoal">${record.date}</h3>
+            </div>
+            <div class="text-right">
+              <span class="text-lg font-semibold text-charcoal">${record.duration}</span>
+              <span class="text-xs text-gray-400">分鐘</span>
+              <button onclick="deleteRecord('${record.id}')" class="block ml-auto mt-1 text-xs text-red-400 hover:text-red-600 transition-colors">刪除</button>
+            </div>
+          </div>
+          ${notesHtml}
+        `;
+        historyList.appendChild(card);
+      });
+      
+      totalCount.textContent = `共 ${records.length} 筆`;
+    }
+
+    // 新增紀錄
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const newRecord = {
+        id: Date.now().toString(), // 用時間戳記當作唯一 ID
+        date: document.getElementById('date').value,
+        type: document.getElementById('type').value,
+        duration: document.getElementById('duration').value,
+        notes: document.getElementById('notes').value
+      };
+
+      records.push(newRecord);
+      saveData();
+      renderRecords();
+      
+      // 清空筆記與時長，但保留日期和類型方便連續輸入
+      document.getElementById('duration').value = '';
+      document.getElementById('notes').value = '';
+    });
+
+    // 刪除紀錄
+    window.deleteRecord = function(id) {
+      if(confirm('確定要刪除這筆紀錄嗎？')) {
+        records = records.filter(record => record.id !== id);
+        saveData();
+        renderRecords();
+      }
+    }
+
+    // 儲存至 LocalStorage
+    function saveData() {
+      localStorage.setItem('pilatesRecords', JSON.stringify(records));
+    }
+
+    // 初次載入時渲染畫面
+    renderRecords();
+  </script>
+
+// === 加入 PWA Service Worker 註冊邏輯 ===
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(registration => {
+            console.log('ServiceWorker 註冊成功，範圍為: ', registration.scope);
+          })
+          .catch(err => {
+            console.log('ServiceWorker 註冊失敗: ', err);
+          });
+      });
+    }
+</body>
+</html>
